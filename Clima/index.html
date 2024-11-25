@@ -31,10 +31,37 @@
       text-align: center;
       width: 300px;
     }
+    .search-container {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1001;
+    }
+    .search-input {
+      padding: 12px;
+      width: 300px;
+      font-size: 16px;
+      border: 2px solid #007BFF;
+      border-radius: 50px;
+      outline: none;
+      transition: all 0.3s;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    }
+    .search-input:focus {
+      border-color: #0056b3;
+      box-shadow: 0 0 8px rgba(0, 123, 255, 0.8);
+    }
+    .search-input::placeholder {
+      color: #888;
+    }
   </style>
 </head>
 <body>
   <div id="error-message"></div>
+  <div class="search-container">
+    <input id="city-search" class="search-input" type="text" placeholder="Buscar ciudad o pueblo...">
+  </div>
   <div id="map"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -120,6 +147,47 @@
         showErrorMessage('Error al obtener datos locales.');
       }
     }
+
+    // Buscar clima en una ciudad específica
+    async function fetchCityWeather(cityName) {
+      clearMarkers();
+
+      const url = `https://api.openweathermap.org/data/2.5/weather?q=${cityName}&units=metric&lang=es&appid=${apiKey}`;
+      try {
+        const response = await fetch(url);
+        const data = await response.json();
+
+        if (data.cod === 200) {
+          const { coord, name, main, weather } = data;
+          const marker = L.marker([coord.lat, coord.lon]).addTo(map);
+          marker.bindPopup(`
+            <div class="weather-popup">
+              <h3>${name}</h3>
+              <p>Temperatura: ${main.temp}°C</p>
+              <p>Clima: ${weather[0].description}</p>
+            </div>
+          `);
+          map.setView([coord.lat, coord.lon], 10); // Centrar el mapa en la ciudad buscada
+          markers.push(marker);
+          showErrorMessage('');
+        } else {
+          showErrorMessage('No se encontró la ciudad.');
+        }
+      } catch (error) {
+        console.error('Error al buscar el clima:', error);
+        showErrorMessage('Error al buscar el clima. Inténtalo más tarde.');
+      }
+    }
+
+    // Manejar búsqueda de ciudad al presionar Enter
+    document.getElementById('city-search').addEventListener('keyup', (event) => {
+      if (event.key === 'Enter') {
+        const cityName = event.target.value.trim();
+        if (cityName) {
+          fetchCityWeather(cityName);
+        }
+      }
+    });
 
     // Llamar a la función al cargar la página
     getUserLocation();
