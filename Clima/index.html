@@ -40,7 +40,7 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
     const apiKey = '2f67a9b5ef749579a8c1e4dc12372a04'; 
-    const map = L.map('map'); // Mapa sin vista inicial definida
+    const map = L.map('map'); // Crear el mapa sin vista inicial definida
     const markers = []; // Para almacenar los marcadores
 
     // Mostrar mensajes de error
@@ -54,20 +54,18 @@
       }
     }
 
-    // Pedir ubicación al usuario y centrar el mapa
+    // Pedir ubicación del usuario para centrar el mapa
     function getUserLocation() {
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
-          async (position) => {
+          (position) => {
             const { latitude, longitude } = position.coords;
-            map.setView([latitude, longitude], 10); // Centrar mapa en la ubicación del usuario
-
-            // Llamar a la función de clima para la ubicación actual
-            fetchCityWeatherByCoordinates(latitude, longitude);
+            map.setView([latitude, longitude], 10); // Centrar el mapa en la ubicación del usuario
+            fetchLocalWeather(); // Cargar clima en la vista inicial
           },
           (error) => {
             console.error('Error al obtener la ubicación:', error);
-            showErrorMessage('No se pudo obtener tu ubicación. Usa el cuadro de búsqueda.');
+            showErrorMessage('No se pudo obtener tu ubicación. Usa el cuadro de búsqueda o explora el mapa.');
             map.setView([20, 0], 2); // Vista global por defecto
           }
         );
@@ -88,37 +86,46 @@
       markers.length = 0; // Vaciar el array de marcadores
     }
 
-    // Obtener clima basado en coordenadas
-    async function fetchCityWeatherByCoordinates(lat, lon) {
-      clearMarkers();
-      const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&units=metric&lang=es&appid=${apiKey}`;
+    // Obtener clima local en el área visible
+    async function fetchLocalWeather() {
+      clearMarkers(); // Eliminar marcadores existentes
+
+      const bounds = map.getBounds();
+      const { _southWest: sw, _northEast: ne } = bounds;
+
+      const url = `https://api.openweathermap.org/data/2.5/find?lat=${(sw.lat + ne.lat) / 2}&lon=${(sw.lng + ne.lng) / 2}&cnt=10&units=metric&lang=es&appid=${apiKey}`;
+
       try {
         const response = await fetch(url);
         const data = await response.json();
 
-        if (data.cod === 200) {
-          const { name, main, weather } = data;
-          const marker = L.marker([lat, lon]).addTo(map);
-          marker.bindPopup(`
-            <div class="weather-popup">
-              <h3>${name}</h3>
-              <p>Temperatura: ${main.temp}°C</p>
-              <p>Clima: ${weather[0].description}</p>
-            </div>
-          `);
-          markers.push(marker);
-          showErrorMessage('');
+        if (data.list && data.list.length > 0) {
+          showErrorMessage(''); // Ocultar el mensaje de error
+          data.list.forEach(city => {
+            const marker = L.marker([city.coord.lat, city.coord.lon]).addTo(map);
+            marker.bindPopup(`
+              <div class="weather-popup">
+                <h3>${city.name}</h3>
+                <p>Temperatura: ${city.main.temp}°C</p>
+                <p>Clima: ${city.weather[0].description}</p>
+              </div>
+            `);
+            markers.push(marker);
+          });
         } else {
-          showErrorMessage('No se pudo obtener el clima para tu ubicación.');
+          showErrorMessage('No se encontraron ciudades cercanas.');
         }
       } catch (error) {
-        console.error('Error al obtener los datos del clima:', error);
-        showErrorMessage('Error al obtener los datos del clima. Inténtalo más tarde.');
+        console.error('Error al obtener datos locales:', error);
+        showErrorMessage('Error al obtener datos locales.');
       }
     }
 
-    // Llamar a la función para obtener la ubicación al cargar la página
+    // Llamar a la función al cargar la página
     getUserLocation();
+
+    // Actualizar datos climáticos al mover o hacer zoom en el mapa
+    map.on('moveend', fetchLocalWeather);
   </script>
 </body>
 </html>
