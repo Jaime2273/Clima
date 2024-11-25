@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Mapa del Clima</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
   <style>
     body {
       font-family: 'Arial', sans-serif;
@@ -15,11 +14,11 @@
       background-color: #f4f7f6;
     }
     #map {
-      height: 100vh; /* Ocupa toda la altura de la pantalla */
+      height: 100vh;
     }
     #error-message {
       position: absolute;
-      top: 80px; /* Mover el mensaje de error hacia abajo */
+      top: 80px;
       left: 50%;
       transform: translateX(-50%);
       background: rgba(255, 0, 0, 0.8);
@@ -32,69 +31,17 @@
       text-align: center;
       width: 300px;
     }
-    .search-container {
-      position: absolute;
-      top: 20px; /* Dejar espacio suficiente para el mensaje de error */
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 1001;
-      width: 100%;
-      text-align: center;
-    }
-    .search-input {
-      padding: 12px;
-      width: 300px;
-      font-size: 16px;
-      border: 2px solid #007BFF;
-      border-radius: 50px;
-      outline: none;
-      transition: all 0.3s;
-      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-    }
-    .search-input:focus {
-      border-color: #0056b3;
-      box-shadow: 0 0 8px rgba(0, 123, 255, 0.8);
-    }
-    .search-input::placeholder {
-      color: #888;
-    }
-    .weather-popup {
-      font-size: 16px;
-      text-align: left;
-      padding: 10px;
-      background-color: rgba(255, 255, 255, 0.9);
-      border-radius: 10px;
-      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-    }
-    .weather-popup h3 {
-      margin: 0;
-      font-size: 18px;
-      color: #333;
-    }
-    .weather-popup p {
-      margin: 5px 0;
-      color: #555;
-    }
   </style>
 </head>
 <body>
   <div id="error-message"></div>
-  <div class="search-container">
-    <input id="city-search" class="search-input" type="text" placeholder="Buscar ciudad o pueblo...">
-  </div>
   <div id="map"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
   <script>
     const apiKey = '2f67a9b5ef749579a8c1e4dc12372a04'; 
-    const map = L.map('map').setView([20, 0], 2); // Vista inicial global
-    const markers = []; // Almacenar marcadores
-
-    // Añadir capa de mapa base
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap contributors'
-    }).addTo(map);
+    const map = L.map('map'); // Mapa sin vista inicial definida
+    const markers = []; // Para almacenar los marcadores
 
     // Mostrar mensajes de error
     function showErrorMessage(message) {
@@ -107,25 +54,51 @@
       }
     }
 
+    // Pedir ubicación al usuario y centrar el mapa
+    function getUserLocation() {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          async (position) => {
+            const { latitude, longitude } = position.coords;
+            map.setView([latitude, longitude], 10); // Centrar mapa en la ubicación del usuario
+
+            // Llamar a la función de clima para la ubicación actual
+            fetchCityWeatherByCoordinates(latitude, longitude);
+          },
+          (error) => {
+            console.error('Error al obtener la ubicación:', error);
+            showErrorMessage('No se pudo obtener tu ubicación. Usa el cuadro de búsqueda.');
+            map.setView([20, 0], 2); // Vista global por defecto
+          }
+        );
+      } else {
+        showErrorMessage('Tu navegador no soporta geolocalización.');
+        map.setView([20, 0], 2); // Vista global por defecto
+      }
+    }
+
+    // Añadir capa base de mapa
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+
     // Limpiar todos los marcadores
     function clearMarkers() {
       markers.forEach(marker => map.removeLayer(marker));
       markers.length = 0; // Vaciar el array de marcadores
     }
 
-    // Función para obtener clima de una ciudad específica
-    async function fetchCityWeather(cityName) {
-      clearMarkers(); // Limpiar marcadores existentes
-
-      const url = `https://api.openweathermap.org/data/2.5/weather?q=${cityName}&units=metric&lang=es&appid=${apiKey}`;
-
+    // Obtener clima basado en coordenadas
+    async function fetchCityWeatherByCoordinates(lat, lon) {
+      clearMarkers();
+      const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&units=metric&lang=es&appid=${apiKey}`;
       try {
         const response = await fetch(url);
         const data = await response.json();
 
         if (data.cod === 200) {
-          const { coord, name, main, weather } = data;
-          const marker = L.marker([coord.lat, coord.lon]).addTo(map);
+          const { name, main, weather } = data;
+          const marker = L.marker([lat, lon]).addTo(map);
           marker.bindPopup(`
             <div class="weather-popup">
               <h3>${name}</h3>
@@ -133,11 +106,10 @@
               <p>Clima: ${weather[0].description}</p>
             </div>
           `);
-          map.setView([coord.lat, coord.lon], 10); // Centrar el mapa en la ciudad
           markers.push(marker);
           showErrorMessage('');
         } else {
-          showErrorMessage('No se encontró la ciudad.');
+          showErrorMessage('No se pudo obtener el clima para tu ubicación.');
         }
       } catch (error) {
         console.error('Error al obtener los datos del clima:', error);
@@ -145,117 +117,8 @@
       }
     }
 
-    // Función para manejar la búsqueda de ciudades
-    function handleSearch() {
-      const cityName = document.getElementById('city-search').value;
-      if (cityName.trim() !== '') {
-        fetchCityWeather(cityName);
-      }
-    }
-
-    // Agregar el controlador de eventos al cuadro de búsqueda
-    document.getElementById('city-search').addEventListener('keyup', (event) => {
-      if (event.key === 'Enter') { // Si presionas Enter en el campo de búsqueda
-        handleSearch();
-      }
-    });
-
-    // Función para obtener clima de las capitales cuando el zoom es bajo
-    async function fetchCapitalsWeather() {
-      clearMarkers(); // Eliminar todos los marcadores existentes
-
-      try {
-        const response = await fetch('https://restcountries.com/v3.1/all');
-        const countries = await response.json();
-
-        const capitals = countries
-          .filter(country => country.capital && country.latlng)
-          .map(country => ({
-            name: country.capital[0],
-            lat: country.latlng[0],
-            lon: country.latlng[1]
-          }));
-
-        const weatherData = await Promise.all(
-          capitals.map(capital =>
-            fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${capital.lat}&lon=${capital.lon}&units=metric&lang=es&appid=${apiKey}`)
-              .then(res => res.json())
-              .then(data => ({ ...capital, weather: data }))
-          )
-        );
-
-        weatherData.forEach(capital => {
-          if (capital.weather && capital.weather.name) {
-            const marker = L.marker([capital.lat, capital.lon]).addTo(map);
-            marker.bindPopup(`
-              <div class="weather-popup">
-                <h3>${capital.name}</h3>
-                <p>Temperatura: ${capital.weather.main.temp}°C</p>
-                <p>Clima: ${capital.weather.weather[0].description}</p>
-              </div>
-            `);
-            markers.push(marker);
-          }
-        });
-
-        showErrorMessage(''); // Ocultar mensajes de error
-      } catch (error) {
-        console.error('Error al obtener datos de capitales:', error);
-        showErrorMessage('Error al obtener los datos de las capitales.');
-      }
-    }
-
-    // Función para obtener clima local en el área visible
-    async function fetchLocalWeather() {
-      clearMarkers(); // Eliminar todos los marcadores existentes
-
-      const bounds = map.getBounds();
-      const { _southWest: sw, _northEast: ne } = bounds;
-
-      const url = `https://api.openweathermap.org/data/2.5/find?lat=${(sw.lat + ne.lat) / 2}&lon=${(sw.lng + ne.lng) / 2}&cnt=10&units=metric&lang=es&appid=${apiKey}`;
-
-      try {
-        const response = await fetch(url);
-        const data = await response.json();
-
-        if (data.list && data.list.length > 0) {
-          showErrorMessage(''); // Ocultar el mensaje de error
-          data.list.forEach(city => {
-            const marker = L.marker([city.coord.lat, city.coord.lon]).addTo(map);
-            marker.bindPopup(`
-              <div class="weather-popup">
-                <h3>${city.name}</h3>
-                <p>Temperatura: ${city.main.temp}°C</p>
-                <p>Clima: ${city.weather[0].description}</p>
-              </div>
-            `);
-            markers.push(marker);
-          });
-        } else {
-          showErrorMessage('No se encontraron ciudades cercanas.');
-        }
-      } catch (error) {
-        console.error('Error al obtener datos locales:', error);
-        showErrorMessage('Error al obtener datos locales.');
-      }
-    }
-
-    // Control del zoom para determinar qué datos cargar
-    async function fetchWeather() {
-      const zoomLevel = map.getZoom();
-
-      if (zoomLevel <= 6) {
-        await fetchCapitalsWeather();
-      } else {
-        await fetchLocalWeather();
-      }
-    }
-
-    // Llamada inicial
-    fetchWeather();
-
-    // Actualizar al mover o hacer zoom
-    map.on('moveend', fetchWeather);
+    // Llamar a la función para obtener la ubicación al cargar la página
+    getUserLocation();
   </script>
 </body>
 </html>
