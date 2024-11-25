@@ -10,47 +10,47 @@
       font-family: 'Arial', sans-serif;
       margin: 0;
       padding: 0;
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
       background-color: #f4f7f6;
     }
-    #container {
-      display: flex;
-      flex: 1;
-      overflow: hidden;
+    #map {
+      height: 100vh;
+      width: 100%;
     }
     #sidebar {
-      width: 300px;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      max-height: 50%;
       background: #fff;
-      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+      box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.2);
       overflow-y: auto;
-      padding: 10px;
       transition: transform 0.3s ease-in-out;
-      transform: translateX(0);
+      transform: translateY(100%); /* Ocultar la lista inicialmente */
     }
-    #map {
-      flex: 1;
-      height: 100%;
+    #sidebar.open {
+      transform: translateY(0); /* Mostrar la lista */
     }
     #sidebar h2 {
-      font-size: 20px;
+      font-size: 18px;
       text-align: center;
-      margin-bottom: 10px;
-      color: #007BFF;
+      padding: 10px 0;
+      background: #007BFF;
+      color: white;
+      margin: 0;
     }
     #error-message {
       background: rgba(255, 0, 0, 0.8);
       color: white;
       padding: 10px;
-      margin-bottom: 10px;
+      margin: 10px;
       border-radius: 5px;
       display: none;
       text-align: center;
     }
     .location-item {
       padding: 10px;
-      margin: 5px 0;
+      margin: 5px 10px;
       background: #f4f7f6;
       border: 1px solid #ddd;
       border-radius: 5px;
@@ -70,42 +70,35 @@
       font-size: 14px;
       color: #555;
     }
-
-    /* Diseño responsivo */
-    @media (max-width: 768px) {
-      #container {
-        flex-direction: column;
-      }
-      #sidebar {
-        width: 100%;
-        height: 250px;
-        transform: translateY(0);
-      }
-      #map {
-        height: calc(100% - 250px);
-      }
+    #toggle-sidebar {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1000;
+      background: #007BFF;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 16px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
     }
-
-    @media (max-width: 480px) {
-      #sidebar {
-        height: 200px;
-      }
-      #map {
-        height: calc(100% - 200px);
-      }
+    #toggle-sidebar:focus {
+      outline: none;
     }
   </style>
 </head>
 <body>
-  <div id="container">
-    <div id="sidebar">
-      <h2>Clima Cercano</h2>
-      <div id="error-message"></div>
-      <div id="locations-list">
-        <p>Cargando lugares cercanos...</p>
-      </div>
+  <div id="map"></div>
+  <button id="toggle-sidebar">Ver Lugares Cercanos</button>
+  <div id="sidebar">
+    <h2>Clima Cercano</h2>
+    <div id="error-message"></div>
+    <div id="locations-list">
+      <p>Cargando lugares cercanos...</p>
     </div>
-    <div id="map"></div>
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -113,6 +106,20 @@
     const apiKey = '2f67a9b5ef749579a8c1e4dc12372a04';
     const map = L.map('map'); // Crear el mapa sin vista inicial definida
     const markers = []; // Para almacenar los marcadores
+
+    const toggleSidebarButton = document.getElementById('toggle-sidebar');
+    const sidebar = document.getElementById('sidebar');
+
+    // Mostrar/ocultar la barra lateral
+    toggleSidebarButton.addEventListener('click', () => {
+      if (sidebar.classList.contains('open')) {
+        sidebar.classList.remove('open');
+        toggleSidebarButton.textContent = 'Ver Lugares Cercanos';
+      } else {
+        sidebar.classList.add('open');
+        toggleSidebarButton.textContent = 'Ocultar Lugares Cercanos';
+      }
+    });
 
     // Mostrar mensajes de error
     function showErrorMessage(message) {
