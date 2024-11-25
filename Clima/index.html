@@ -10,63 +10,72 @@
       font-family: 'Arial', sans-serif;
       margin: 0;
       padding: 0;
-      overflow: hidden;
+      display: flex;
+      height: 100vh;
       background-color: #f4f7f6;
     }
     #map {
-      height: 100vh;
+      flex: 1;
+    }
+    #sidebar {
+      width: 300px;
+      background: #fff;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+      overflow-y: auto;
+      padding: 10px;
+    }
+    #sidebar h2 {
+      font-size: 20px;
+      text-align: center;
+      margin-bottom: 10px;
+      color: #007BFF;
     }
     #error-message {
-      position: absolute;
-      top: 80px;
-      left: 50%;
-      transform: translateX(-50%);
       background: rgba(255, 0, 0, 0.8);
       color: white;
-      padding: 15px 20px;
-      border-radius: 10px;
-      font-size: 16px;
-      z-index: 1000;
+      padding: 10px;
+      margin-bottom: 10px;
+      border-radius: 5px;
       display: none;
       text-align: center;
-      width: 300px;
     }
-    .search-container {
-      position: absolute;
-      top: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 1001;
+    .location-item {
+      padding: 10px;
+      margin: 5px 0;
+      background: #f4f7f6;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: background 0.3s;
     }
-    .search-input {
-      padding: 12px;
-      width: 300px;
+    .location-item:hover {
+      background: #e7f1ff;
+    }
+    .location-item h3 {
+      margin: 0;
       font-size: 16px;
-      border: 2px solid #007BFF;
-      border-radius: 50px;
-      outline: none;
-      transition: all 0.3s;
-      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+      color: #007BFF;
     }
-    .search-input:focus {
-      border-color: #0056b3;
-      box-shadow: 0 0 8px rgba(0, 123, 255, 0.8);
-    }
-    .search-input::placeholder {
-      color: #888;
+    .location-item p {
+      margin: 5px 0;
+      font-size: 14px;
+      color: #555;
     }
   </style>
 </head>
 <body>
-  <div id="error-message"></div>
-  <div class="search-container">
-    <input id="city-search" class="search-input" type="text" placeholder="Buscar ciudad o pueblo...">
+  <div id="sidebar">
+    <h2>Clima Cercano</h2>
+    <div id="error-message"></div>
+    <div id="locations-list">
+      <p>Cargando lugares cercanos...</p>
+    </div>
   </div>
   <div id="map"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
-    const apiKey = '2f67a9b5ef749579a8c1e4dc12372a04'; 
+    const apiKey = '2f67a9b5ef749579a8c1e4dc12372a04';
     const map = L.map('map'); // Crear el mapa sin vista inicial definida
     const markers = []; // Para almacenar los marcadores
 
@@ -92,7 +101,7 @@
           },
           (error) => {
             console.error('Error al obtener la ubicación:', error);
-            showErrorMessage('No se pudo obtener tu ubicación. Usa el cuadro de búsqueda o explora el mapa.');
+            showErrorMessage('No se pudo obtener tu ubicación. Usa el mapa.');
             map.setView([20, 0], 2); // Vista global por defecto
           }
         );
@@ -113,9 +122,11 @@
       markers.length = 0; // Vaciar el array de marcadores
     }
 
-    // Obtener clima local en el área visible
+    // Obtener clima local en el área visible y poblar la lista
     async function fetchLocalWeather() {
       clearMarkers(); // Eliminar marcadores existentes
+      const locationsList = document.getElementById('locations-list');
+      locationsList.innerHTML = '<p>Cargando lugares cercanos...</p>';
 
       const bounds = map.getBounds();
       const { _southWest: sw, _northEast: ne } = bounds;
@@ -128,7 +139,9 @@
 
         if (data.list && data.list.length > 0) {
           showErrorMessage(''); // Ocultar el mensaje de error
+          locationsList.innerHTML = ''; // Limpiar lista
           data.list.forEach(city => {
+            // Crear marcador
             const marker = L.marker([city.coord.lat, city.coord.lon]).addTo(map);
             marker.bindPopup(`
               <div class="weather-popup">
@@ -138,56 +151,29 @@
               </div>
             `);
             markers.push(marker);
+
+            // Crear elemento en la lista
+            const locationItem = document.createElement('div');
+            locationItem.className = 'location-item';
+            locationItem.innerHTML = `
+              <h3>${city.name}</h3>
+              <p>Temperatura: ${city.main.temp}°C</p>
+              <p>Clima: ${city.weather[0].description}</p>
+            `;
+            locationItem.addEventListener('click', () => {
+              map.setView([city.coord.lat, city.coord.lon], 10);
+              marker.openPopup();
+            });
+            locationsList.appendChild(locationItem);
           });
         } else {
-          showErrorMessage('No se encontraron ciudades cercanas.');
+          locationsList.innerHTML = '<p>No se encontraron ciudades cercanas.</p>';
         }
       } catch (error) {
         console.error('Error al obtener datos locales:', error);
         showErrorMessage('Error al obtener datos locales.');
       }
     }
-
-    // Buscar clima en una ciudad específica
-    async function fetchCityWeather(cityName) {
-      clearMarkers();
-
-      const url = `https://api.openweathermap.org/data/2.5/weather?q=${cityName}&units=metric&lang=es&appid=${apiKey}`;
-      try {
-        const response = await fetch(url);
-        const data = await response.json();
-
-        if (data.cod === 200) {
-          const { coord, name, main, weather } = data;
-          const marker = L.marker([coord.lat, coord.lon]).addTo(map);
-          marker.bindPopup(`
-            <div class="weather-popup">
-              <h3>${name}</h3>
-              <p>Temperatura: ${main.temp}°C</p>
-              <p>Clima: ${weather[0].description}</p>
-            </div>
-          `);
-          map.setView([coord.lat, coord.lon], 10); // Centrar el mapa en la ciudad buscada
-          markers.push(marker);
-          showErrorMessage('');
-        } else {
-          showErrorMessage('No se encontró la ciudad.');
-        }
-      } catch (error) {
-        console.error('Error al buscar el clima:', error);
-        showErrorMessage('Error al buscar el clima. Inténtalo más tarde.');
-      }
-    }
-
-    // Manejar búsqueda de ciudad al presionar Enter
-    document.getElementById('city-search').addEventListener('keyup', (event) => {
-      if (event.key === 'Enter') {
-        const cityName = event.target.value.trim();
-        if (cityName) {
-          fetchCityWeather(cityName);
-        }
-      }
-    });
 
     // Llamar a la función al cargar la página
     getUserLocation();
