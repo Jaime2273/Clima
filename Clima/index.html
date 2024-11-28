@@ -11,34 +11,49 @@
       margin: 0;
       padding: 0;
       background-color: #f4f7f6;
+      display: flex;
+      flex-direction: column;
+      height: 100%;
     }
+
+    h1 {
+      text-align: center;
+      background-color: #007BFF;
+      color: white;
+      padding: 15px 0;
+      margin: 0;
+    }
+
     #map {
-      height: 100vh;
+      height: 70vh;
       width: 100%;
     }
+
     #sidebar {
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      width: 100%;
-      max-height: 50%;
-      background: #fff;
+      position: relative;
+      background-color: #fff;
       box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.2);
       overflow-y: auto;
+      max-height: 30vh;
+      padding: 10px;
       transition: transform 0.3s ease-in-out;
-      transform: translateY(100%); /* Ocultar la lista inicialmente */
+      z-index: 1000;
     }
+
     #sidebar.open {
-      transform: translateY(0); /* Mostrar la lista */
+      transform: translateY(0);
     }
+
     #sidebar h2 {
-      font-size: 18px;
+      font-size: 22px;
       text-align: center;
-      padding: 10px 0;
+      padding: 15px;
       background: #007BFF;
       color: white;
       margin: 0;
+      border-radius: 10px;
     }
+
     #error-message {
       background: rgba(255, 0, 0, 0.8);
       color: white;
@@ -48,53 +63,72 @@
       display: none;
       text-align: center;
     }
+
     .location-item {
-      padding: 10px;
-      margin: 5px 10px;
-      background: #f4f7f6;
+      padding: 15px;
+      margin: 8px 0;
+      background: #ffffff;
       border: 1px solid #ddd;
-      border-radius: 5px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
       cursor: pointer;
-      transition: background 0.3s;
+      transition: transform 0.3s, box-shadow 0.3s;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
     }
+
     .location-item:hover {
-      background: #e7f1ff;
+      transform: translateX(5px);
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
     }
+
     .location-item h3 {
       margin: 0;
-      font-size: 16px;
+      font-size: 18px;
       color: #007BFF;
     }
+
     .location-item p {
       margin: 5px 0;
       font-size: 14px;
       color: #555;
     }
-    #toggle-sidebar {
-      position: fixed;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 1000;
-      background: #007BFF;
-      color: white;
-      border: none;
-      padding: 10px 20px;
-      border-radius: 5px;
-      cursor: pointer;
-      font-size: 16px;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+
+    .location-item .weather-icon {
+      width: 40px;
+      height: 40px;
     }
-    #toggle-sidebar:focus {
-      outline: none;
+
+    /* Responsividad */
+    @media (max-width: 600px) {
+      #map {
+        height: 60vh;
+      }
+
+      #sidebar {
+        max-height: 40vh;
+      }
+
+      .location-item h3 {
+        font-size: 16px;
+      }
+
+      .location-item p {
+        font-size: 13px;
+      }
+
+      .location-item {
+        padding: 12px;
+      }
     }
   </style>
 </head>
 <body>
+  <h1>Explora el Clima en el Mundo</h1>
   <div id="map"></div>
-  <button id="toggle-sidebar">Ver Lugares Cercanos</button>
   <div id="sidebar">
-    <h2>Clima Cercano</h2>
+    <h2>Lugares Cercanos y Clima</h2>
     <div id="error-message"></div>
     <div id="locations-list">
       <p>Cargando lugares cercanos...</p>
@@ -104,23 +138,10 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
     const apiKey = '2f67a9b5ef749579a8c1e4dc12372a04';
-    const map = L.map('map'); // Crear el mapa sin vista inicial definida
-    const markers = []; // Para almacenar los marcadores
-
-    const toggleSidebarButton = document.getElementById('toggle-sidebar');
-    const sidebar = document.getElementById('sidebar');
-
-    // Mostrar/ocultar la barra lateral
-    toggleSidebarButton.addEventListener('click', () => {
-      if (sidebar.classList.contains('open')) {
-        sidebar.classList.remove('open');
-        toggleSidebarButton.textContent = 'Ver Lugares Cercanos';
-      } else {
-        sidebar.classList.add('open');
-        toggleSidebarButton.textContent = 'Ocultar Lugares Cercanos';
-      }
-    });
-
+    const map = L.map('map');
+    const markers = [];
+    let capitalMarkers = [];
+    
     // Mostrar mensajes de error
     function showErrorMessage(message) {
       const errorMessageDiv = document.getElementById('error-message');
@@ -132,14 +153,14 @@
       }
     }
 
-    // Pedir ubicación del usuario para centrar el mapa
+    // Obtener la ubicación del usuario y centrar el mapa
     function getUserLocation() {
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
           (position) => {
             const { latitude, longitude } = position.coords;
-            map.setView([latitude, longitude], 10); // Centrar el mapa en la ubicación del usuario
-            fetchLocalWeather(); // Cargar clima en la vista inicial
+            map.setView([latitude, longitude], 10);
+            fetchLocalWeather(); // Actualiza la lista de lugares cercanos
           },
           (error) => {
             console.error('Error al obtener la ubicación:', error);
@@ -161,12 +182,79 @@
     // Limpiar todos los marcadores
     function clearMarkers() {
       markers.forEach(marker => map.removeLayer(marker));
-      markers.length = 0; // Vaciar el array de marcadores
+      markers.length = 0;
+    }
+
+    // Limpiar los marcadores de las capitales
+    function clearCapitalMarkers() {
+      capitalMarkers.forEach(marker => map.removeLayer(marker));
+      capitalMarkers.length = 0;
+    }
+
+    // Obtener las capitales visibles y mostrar el clima
+    async function fetchCapitalWeather() {
+      clearCapitalMarkers();
+      const locationsList = document.getElementById('locations-list');
+      locationsList.innerHTML = '<p>Cargando capitales...</p>';
+
+      const bounds = map.getBounds();
+      const { _southWest: sw, _northEast: ne } = bounds;
+
+      // Lista completa de algunas capitales importantes del mundo
+      const capitalCities = [
+        { name: "Buenos Aires", lat: -34.6037, lon: -58.3816 },
+        { name: "Madrid", lat: 40.4168, lon: -3.7038 },
+        { name: "París", lat: 48.8566, lon: 2.3522 },
+        { name: "Tokio", lat: 35.6762, lon: 139.6503 },
+        { name: "Washington D.C.", lat: 38.9072, lon: -77.0369 },
+        { name: "Londres", lat: 51.5074, lon: -0.1278 },
+        { name: "Pekín", lat: 39.9042, lon: 116.4074 },
+        { name: "Berlín", lat: 52.52, lon: 13.405 },
+        { name: "Moscú", lat: 55.7558, lon: 37.6173 },
+        { name: "Nueva Delhi", lat: 28.6139, lon: 77.2090 },
+        { name: "Roma", lat: 41.9028, lon: 12.4964 },
+        { name: "Ciudad de México", lat: 19.4326, lon: -99.1332 },
+        { name: "El Cairo", lat: 30.0444, lon: 31.2357 },
+        { name: "Ámsterdam", lat: 52.3676, lon: 4.9041 },
+        { name: "Canberra", lat: -35.2809, lon: 149.1300 },
+        { name: "Ottawa", lat: 45.4215, lon: -75.6972 },
+        { name: "Brasilia", lat: -15.7801, lon: -47.9292 }
+        // Puedes añadir más capitales aquí
+      ];
+
+      try {
+        capitalCities.forEach(city => {
+          const marker = L.marker([city.lat, city.lon]).addTo(map);
+          marker.bindPopup(`
+            <div class="weather-popup">
+              <h3>${city.name}</h3>
+              <p>Clima: Soleado</p> <!-- Puedes usar la API para obtener clima real -->
+            </div>
+          `);
+          capitalMarkers.push(marker);
+
+          // Mostrar la ciudad en la lista
+          const locationItem = document.createElement('div');
+          locationItem.className = 'location-item';
+          locationItem.innerHTML = `
+            <h3>${city.name}</h3>
+            <p>Clima: Soleado</p> <!-- Aquí el clima real -->
+          `;
+          locationItem.addEventListener('click', () => {
+            map.setView([city.lat, city.lon], 10);
+            marker.openPopup();
+          });
+          locationsList.appendChild(locationItem);
+        });
+      } catch (error) {
+        console.error('Error al obtener datos de las capitales:', error);
+        locationsList.innerHTML = '<p>No se pudo obtener la información del clima de las capitales.</p>';
+      }
     }
 
     // Obtener clima local en el área visible y poblar la lista
     async function fetchLocalWeather() {
-      clearMarkers(); // Eliminar marcadores existentes
+      clearMarkers();
       const locationsList = document.getElementById('locations-list');
       locationsList.innerHTML = '<p>Cargando lugares cercanos...</p>';
 
@@ -183,7 +271,6 @@
           showErrorMessage(''); // Ocultar el mensaje de error
           locationsList.innerHTML = ''; // Limpiar lista
           data.list.forEach(city => {
-            // Crear marcador
             const marker = L.marker([city.coord.lat, city.coord.lon]).addTo(map);
             marker.bindPopup(`
               <div class="weather-popup">
@@ -217,11 +304,20 @@
       }
     }
 
-    // Llamar a la función al cargar la página
-    getUserLocation();
+    // Evento de zoom: mostrar las capitales si el mapa está más alejado
+    map.on('zoomend', () => {
+      const zoomLevel = map.getZoom();
+      if (zoomLevel < 6) { // Cuando el zoom está en un nivel bajo (visibilidad global)
+        fetchCapitalWeather();
+        clearMarkers(); // Ocultar lugares cercanos
+      } else {
+        fetchLocalWeather();
+        clearCapitalMarkers(); // Ocultar capitales
+      }
+    });
 
-    // Actualizar datos climáticos al mover o hacer zoom en el mapa
-    map.on('moveend', fetchLocalWeather);
+    // Inicializar el mapa
+    getUserLocation();
   </script>
 </body>
 </html>
